@@ -38,6 +38,12 @@ RUN groupadd -g ${GROUP_ID} sstgroup || true && \
 
 WORKDIR /workspace
 
+# Environment variables for SST Core and Ramulator discovery
+ENV SST_CORE_HOME=/workspace/sst-core/sst-core-install
+ENV PATH=${SST_CORE_HOME}/bin:${PATH}
+ENV PKG_CONFIG_PATH=${SST_CORE_HOME}/lib/pkgconfig:${PKG_CONFIG_PATH}
+ENV PYTHONPATH=/workspace/ramulator2:${PYTHONPATH}
+
 # Entry script to clone repositories into mounted subfolders if not already present
 RUN printf '#!/usr/bin/env bash\n\
 set -e\n\
@@ -64,6 +70,9 @@ exec "$@"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 RUN chown -R ${USER_ID}:${GROUP_ID} /workspace /entrypoint.sh
 
 USER sstuser
+
+# Configure Git safe directory for the non-root user
+RUN git config --global --add safe.directory '*'
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/bin/bash"]
