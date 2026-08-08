@@ -108,9 +108,13 @@ Run the selective build script
 
 2. Compile your workload file. Ex:
 
+    ```cd /workspace/project```
+
     ```/workspace/project/scripts/singlecore_compile.sh workloads/source/graph.c```
 
 3. Run sst config. Ex:
+
+    ```cd /workspace/project```
 
     ```sst /workspace/project/sst_configs/singlecore.py```
 
