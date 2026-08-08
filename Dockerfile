@@ -2,6 +2,10 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Build arguments for host user alignment (default to 1000:1000)
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 # Install dependencies for SST Core, SST Elements, and Ramulator 2
 RUN apt-get update && apt-get install -y \
     autoconf \
@@ -23,6 +27,10 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     vim \
     && rm -rf /var/lib/apt/lists/*
+
+# Create a group and non-root user matching the host UID/GID
+RUN groupadd -g ${GROUP_ID} sstgroup || true && \
+    useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash sstuser || true
 
 WORKDIR /workspace
 
@@ -47,6 +55,11 @@ if [ -z "$(ls -A /workspace/ramulator2)" ]; then\n\
 fi\n\
 \n\
 exec "$@"\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Ensure the non-root user owns workspace and entrypoint execution path
+RUN chown -R ${USER_ID}:${GROUP_ID} /workspace /entrypoint.sh
+
+USER sstuser
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/bin/bash"]

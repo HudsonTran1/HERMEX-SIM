@@ -3,7 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sst_ubuntu_cli
+      args:
+        USER_ID: ${UID:-1000}
+        GROUP_ID: ${GID:-1000}
+    container_name: sst
+    user: "${UID:-1000}:${GID:-1000}"
     stdin_open: true  # docker run -i
     tty: true        # docker run -t
     volumes:
