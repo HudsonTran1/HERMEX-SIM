@@ -14,14 +14,14 @@
 
 Run the setup script:
 
-```./scripts/setup_ramulator.sh```
+```/workspace/project/scripts/setup_ramulator.sh```
 
 ### Manual setup
 1. Add/modify files
 
-    I. Add ```sst_frontend.cpp``` to ```/src/ramulator/frontend/impl/external_wrapper```
+    I. Add ```sst_frontend.cpp``` to ```ramulator2/src/ramulator/frontend/impl/external_wrapper```
     
-    II. Modify ```CMakeLists.txt``` to inclue ```impl/external_wrapper/sst_frontend.cpp```
+    II. Modify ```CMakeLists.txt``` to inclue ```ramulator2/impl/external_wrapper/sst_frontend.cpp```
 
     ```diff
         i_frontend.h
@@ -33,10 +33,10 @@ Run the setup script:
         impl/memory_trace/latency_throughput_trace.cpp
     ```
 
-    III. Add ```sedram.py``` in ```python/ramulator/dram```
+    III. Add ```sedram.py``` in ```ramulator2/python/ramulator/dram```
         (Recommended to double check the included latencies, as this was generated from the .cpp file provided to me)
     
-    IV. Modify ```src/ramulator/dram/CMakeLists.txt``` to include SeDRAM.cpp
+    IV. Modify ```ramulator2/src/ramulator/dram/CMakeLists.txt``` to include SeDRAM.cpp
     ```diff
         commands/VRR.h
         commands/populate.h
@@ -47,7 +47,7 @@ Run the setup script:
         impl/DDR4_VRR.cpp
     ```
 
-    V. Modify ```src/ramulator/controller/refresh/impl/all_bank.cpp``` to include SeDRAM
+    V. Modify ```ramulator2/src/ramulator/controller/refresh/impl/all_bank.cpp``` to include SeDRAM
     ```diff
     -    constexpr std::array<std::pair<std::string_view, std::string_view>, 11> all_bank_refresh_scopes = {{
     +    constexpr std::array<std::pair<std::string_view, std::string_view>, 12> all_bank_refresh_scopes = {{
@@ -76,7 +76,7 @@ Run the setup script:
 
 Install SST-Core (instructions from https://github.com/sstsimulator/sst-core)
 
-```cd sst-core```
+```cd /workspace/sst-core```
 
 ```./autogen.sh```
 
@@ -90,29 +90,29 @@ Install SST-Core (instructions from https://github.com/sstsimulator/sst-core)
 
 Apply the included patchfile (details on this file included in ```patchfiles/sst_elements_patch_details.md```)
 
-```cp patchfiles/patch_sst-elements.patch sst-elements/```
+```cp /workspace/patchfiles/patch_sst-elements.patch /workspace/sst-elements/```
 
-```cd sst-elements/ && git apply patch_sst-elements.patch```
+```cd /workspace/sst-elements/ && git apply patch_sst-elements.patch```
 
 Run the selective build script
 
-```./scripts/build_sst-elements.sh```
+```/workspace/project/scripts/build_sst-elements.sh```
 
 ## Using SST
 
 1. Compile your ramulator configuration
 
-    ```./scripts/generate_ramulator_config.sh```
+    ```/workspace/project/scripts/generate_ramulator_config.sh```
 
 2. Compile your workload file. Ex:
 
-    ``` ./scripts/singlecore_compile.sh workloads/graph.c```
+    ```/workspace/project/scripts/singlecore_compile.sh workloads/source/graph.c```
 
 3. Run sst config. Ex:
 
-    ```sst ./sst_configs/singlecore.py```
+    ```sst /workspace/project/sst_configs/singlecore.py```
 
-View statistics by examining ```stats/ramulator_native_stats.yaml``` and ```sim_stats.csv```, or run
+View statistics by examining ```/workspace/project/stats/ramulator_native_stats.yaml``` and ```/workspace/project/stats/sim_stats.csv```, or run
 
     ```./scripts/summarize_stats.sh```
 
