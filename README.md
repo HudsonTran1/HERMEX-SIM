@@ -12,7 +12,7 @@
 
 4. Open terminal to container
 
-```docker exec -it sst bash```
+    ```docker exec -it sst bash```
 
 ## Ramulator
 ### Automated setup (experimental)
