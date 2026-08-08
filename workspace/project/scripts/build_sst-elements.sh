@@ -18,7 +18,7 @@ Options:
   -h, --help                Show this help message and exit
   -b, --base-dir DIR        Set base working directory (default: $DEFAULT_BASE_DIR)
   -i, --install-dir DIR     SST install prefix path (default: <BASE_DIR>/sst-install)
-  -c, --core-dir DIR        SST Core path (default: <INSTALL_DIR>)
+  -c, --core-dir DIR        SST Core path (default: <BASE_DIR>/sst-core/sst-core-install)
   -r, --ramulator-dir DIR   Ramulator 2 path (default: <BASE_DIR>/ramulator2)
   -e, --elements-dir DIR    SST Elements repository path (default: <BASE_DIR>/sst-elements)
   -j, --jobs N              Number of parallel build jobs (default: nproc)
@@ -111,7 +111,8 @@ done
 # Resolve Final Paths
 BASE_DIR="${CLI_BASE_DIR:-${BASE_DIR:-$DEFAULT_BASE_DIR}}"
 SST_INSTALL_DIR="${CLI_INSTALL_DIR:-${SST_INSTALL_DIR:-$BASE_DIR/sst-install}}"
-SST_CORE_DIR="${CLI_CORE_DIR:-${SST_CORE_DIR:-$SST_INSTALL_DIR}}"
+# Checks CLI -> SST_CORE_DIR -> SST_CORE_HOME -> fallback to /workspace/sst-core/sst-core-install
+SST_CORE_DIR="${CLI_CORE_DIR:-${SST_CORE_DIR:-${SST_CORE_HOME:-$BASE_DIR/sst-core/sst-core-install}}}"
 RAMULATOR2_DIR="${CLI_RAMULATOR_DIR:-${RAMULATOR2_DIR:-$BASE_DIR/ramulator2}}"
 SST_ELEMENTS_DIR="${CLI_ELEMENTS_DIR:-${SST_ELEMENTS_DIR:-$BASE_DIR/sst-elements}}"
 JOBS="${CLI_JOBS:-${JOBS:-$(nproc)}}"
@@ -157,15 +158,28 @@ if [ ! -d "$RAMULATOR2_DIR" ]; then
     exit 1
 fi
 
+if [ ! -f "$SST_CORE_DIR/bin/sst-config" ]; then
+    echo "Error: sst-config not found at: $SST_CORE_DIR/bin/sst-config"
+    echo "Please check your --core-dir path or set SST_CORE_HOME."
+    exit 1
+fi
+
 # Define Ramulator 2 & Debug include/link flags
 RAMULATOR_CPPFLAGS="-I${RAMULATOR2_DIR}/src -I${RAMULATOR2_DIR}/src/ramulator $EXTRA_FLAGS"
 RAMULATOR_CXXFLAGS="$EXTRA_FLAGS"
 RAMULATOR_LDFLAGS="-L${RAMULATOR2_DIR} -Wl,-rpath,${RAMULATOR2_DIR}"
 
 # 1. Configure SST-Elements Root
-echo "--> Running configure in $SST_ELEMENTS_DIR..."
+echo "--> Preparing build in $SST_ELEMENTS_DIR..."
 cd "$SST_ELEMENTS_DIR"
 
+# Ensure ./configure exists before attempting to run it
+if [ ! -f "./configure" ]; then
+    echo "--> ./configure not found. Running autogen.sh..."
+    ./autogen.sh
+fi
+
+echo "--> Running configure in $SST_ELEMENTS_DIR..."
 ./configure \
     --prefix="$SST_INSTALL_DIR" \
     --with-sst-core="$SST_CORE_DIR" \
