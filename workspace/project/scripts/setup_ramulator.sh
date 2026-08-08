@@ -47,15 +47,17 @@ else
 fi
 
 # ------------------------------------------------------------------
-# Step 2: Auto-generate SeDRAM.cpp using Ramulator codegen
+# Step 2: Install Python Package & Auto-generate SeDRAM.cpp
 # ------------------------------------------------------------------
-echo "[2/5] Auto-generating SeDRAM.cpp via ramulator codegen..."
+echo "[2/5] Installing Python module & auto-generating SeDRAM.cpp..."
+
+cd "$RAMULATOR_DIR"
+
+# Install package in editable mode so 'python3 -m ramulator' works natively
+pip install -e . --no-build-isolation || python3 -m pip install -e .
 
 DRAM_IMPL_DIR="$RAMULATOR_DIR/src/ramulator/dram/impl"
 mkdir -p "$DRAM_IMPL_DIR"
-
-cd "$RAMULATOR_DIR"
-export PYTHONPATH="$RAMULATOR_DIR/python:$PYTHONPATH"
 
 # Run the codegen command
 python3 -m ramulator codegen SeDRAM
@@ -118,13 +120,6 @@ cd "$BUILD_DIR"
 
 cmake ..
 make -j"$(nproc)"
-
-# ------------------------------------------------------------------
-# Step 5: Install Python Package
-# ------------------------------------------------------------------
-echo "[5/5] Installing Ramulator 2 Python module (editable mode)..."
-cd "$RAMULATOR_DIR"
-python3-pip install -e /workspace/ramulator2
 
 echo "=========================================================="
 echo "           Ramulator 2 Setup Complete!                    "
