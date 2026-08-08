@@ -90,9 +90,9 @@ Install SST-Core (instructions from https://github.com/sstsimulator/sst-core)
 
 Apply the included patchfile (details on this file included in ```patchfiles/sst_elements_patch_details.md```)
 
-```cp /workspace/patchfiles/patch_sst-elements.patch /workspace/sst-elements/```
+```cd /workspace/sst-elements/```
 
-```cd /workspace/sst-elements/ && git apply patch_sst-elements.patch```
+```patch -p1 --ignore-whitespace < /workspace/patchfiles/patch_sst-elements.patch```
 
 Run the selective build script
 
