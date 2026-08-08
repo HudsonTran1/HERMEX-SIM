@@ -14,6 +14,9 @@ if [ -z "$SO_FILE" ]; then
     exit 1
 fi
 
+# Extract directory of the found .so file to include in PYTHONPATH
+SO_DIR=$(dirname "$SO_FILE")
+
 # 2. Check if ramulator_configs directory exists
 if [ ! -d "$CONFIGS_DIR" ]; then
     echo "Error: Directory '$CONFIGS_DIR' does not exist."
@@ -50,8 +53,11 @@ echo "Converting: $SELECTED_PY"
 echo "Output path: $OUTPUT_YAML"
 echo "------------------------------------------"
 
-# 5. Run conversion using python and the compiled .so library
-PYTHONPATH="$RAMULATOR_DIR:$RAMULATOR_DIR/build:$RAMULATOR_DIR/build/src:$PYTHONPATH" python3 -m ramulator2 -c "$SELECTED_PY" -dump-yaml "$OUTPUT_YAML"
+# 5. Export comprehensive PYTHONPATH including the .so directory, ramulator2 root, and python subfolder
+export PYTHONPATH="$SO_DIR:$RAMULATOR_DIR/python:$RAMULATOR_DIR:$RAMULATOR_DIR/build:$RAMULATOR_DIR/build/src:${PYTHONPATH:-}"
+
+# Run conversion using python and the compiled .so library
+python3 -m ramulator2 -c "$SELECTED_PY" -dump-yaml "$OUTPUT_YAML"
 
 echo "------------------------------------------"
 echo "✅ Successfully updated: $OUTPUT_YAML"
