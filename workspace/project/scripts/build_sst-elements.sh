@@ -6,7 +6,7 @@ set -euo pipefail
 # Supports CLI flags, environment variables, or defaults.
 # ==============================================================================
 
-DEFAULT_BASE_DIR="/home/work"
+DEFAULT_BASE_DIR="/workspace"
 
 show_help() {
     cat << EOF
