@@ -92,6 +92,8 @@ Apply the included patchfile (details on this file included in ```patchfiles/sst
 
 ```cd /workspace/sst-elements/```
 
+```./autogen.sh```
+
 ```patch -p1 --ignore-whitespace < /workspace/patchfiles/patch_sst-elements.patch```
 
 Run the selective build script
