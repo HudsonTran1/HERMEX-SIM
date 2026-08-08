@@ -5,7 +5,7 @@ CONFIGS_DIR="/workspace/project/ramulator_configs"
 OUTPUT_YAML="$CONFIGS_DIR/ramulator_config.yaml"
 RAMULATOR_DIR="/workspace/ramulator2"
 
-# 1. Verify that the .so library exists somewhere under /workspace/ramulator2
+# 1. Verify that the .so library exists inside Ramulator 2 directory
 SO_FILE=$(find "$RAMULATOR_DIR" -type f -name "*.so" | head -n 1)
 
 if [ -z "$SO_FILE" ]; then
@@ -13,9 +13,6 @@ if [ -z "$SO_FILE" ]; then
     echo "Make sure to run 'cmake .. && make' inside /workspace/ramulator2/build."
     exit 1
 fi
-
-# Extract directory of the found .so file to include in PYTHONPATH
-SO_DIR=$(dirname "$SO_FILE")
 
 # 2. Check if ramulator_configs directory exists
 if [ ! -d "$CONFIGS_DIR" ]; then
@@ -53,11 +50,22 @@ echo "Converting: $SELECTED_PY"
 echo "Output path: $OUTPUT_YAML"
 echo "------------------------------------------"
 
-# 5. Export comprehensive PYTHONPATH including the .so directory, ramulator2 root, and python subfolder
-export PYTHONPATH="$SO_DIR:$RAMULATOR_DIR/python:$RAMULATOR_DIR:$RAMULATOR_DIR/build:$RAMULATOR_DIR/build/src:${PYTHONPATH:-}"
+# 5. Set PYTHONPATH to include Ramulator 2 python directory
+export PYTHONPATH="$RAMULATOR_DIR/python:${PYTHONPATH:-}"
 
-# Run conversion using python and the compiled .so library
-PYTHONPATH="$RAMULATOR_DIR/python:$RAMULATOR_DIR/src:$SO_DIR:${PYTHONPATH:-}" python3 "$SELECTED_PY" -dump-yaml "$OUTPUT_YAML"
+# 6. Capture configuration and export to YAML using native Ramulator 2 exporter
+python3 -c "
+import sys
+sys.path.insert(0, '$RAMULATOR_DIR/python')
+
+import ramulator.export
+
+config_dict = ramulator.export.capture_config('$SELECTED_PY')
+yaml_str = ramulator.export.dict_to_yaml(config_dict)
+
+with open('$OUTPUT_YAML', 'w') as f:
+    f.write(yaml_str)
+"
 
 echo "------------------------------------------"
 echo "✅ Successfully updated: $OUTPUT_YAML"

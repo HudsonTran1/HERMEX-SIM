@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------
 WORKLOADS_DIR="workloads"
 DEFAULT_SRC="workloads/source/graph.c"
-DEFAULT_OUT="workload.elf"
+DEFAULT_OUT="workloads/elf/workload.elf"
 COMPILER="riscv64-unknown-elf-gcc"
 
 OPTIMIZATION="-O2"

@@ -1,0 +1,53 @@
+frontend:
+  impl: SST
+memory_system:
+  channel_mapper:
+    impl: CacheLineInterleave
+  controller:
+    addr_mapper:
+      impl: RoBaRaCoCh
+    avg_read_latency: 9.116799
+    cycles: 89732
+    id: Channel 0
+    impl: GenericDDR
+    num_maintenance_reqs: 44
+    num_maintenance_reqs_served: 44
+    num_read_reqs: 5137
+    num_read_reqs_forwarded: 0
+    num_read_reqs_served: 5137
+    num_write_reqs: 1928
+    num_write_reqs_coalesced: 0
+    num_write_reqs_served: 1928
+    priority_queue_len: 1326
+    priority_queue_len_avg: 0.014777
+    queue_len: 21406
+    queue_len_avg: 0.238555
+    read_latency: 46833
+    read_queue_len: 15616
+    read_queue_len_avg: 0.174029
+    read_row_conflicts: 0
+    read_row_conflicts_core_0: 0
+    read_row_hits: 5058
+    read_row_hits_core_0: 5058
+    read_row_misses: 79
+    read_row_misses_core_0: 79
+    read_throughput_MBps: 7327.775879
+    refresh_manager:
+      impl: AllBank
+    row_conflicts: 0
+    row_hits: 6973
+    row_misses: 92
+    row_policy:
+      impl: Open
+    scheduler:
+      impl: FRFCFS
+    total_throughput_MBps: 10078.009766
+    write_queue_len: 4464
+    write_queue_len_avg: 0.049748
+    write_row_conflicts: 0
+    write_row_hits: 1915
+    write_row_misses: 13
+    write_throughput_MBps: 2750.234131
+  impl: GenericDRAM
+  total_num_read_requests: 5137
+  total_num_write_requests: 1928
