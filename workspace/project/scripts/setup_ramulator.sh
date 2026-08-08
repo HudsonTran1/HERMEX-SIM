@@ -28,7 +28,7 @@ fi
 # ------------------------------------------------------------------
 echo "[1/5] Copying new source files into Ramulator 2 repository..."
 
-# I. Copy sst_frontend.cpp to /src/ramulator/frontend/impl/external_wrapper
+# Copy sst_frontend.cpp to /src/ramulator/frontend/impl/external_wrapper
 mkdir -p "$RAMULATOR_DIR/src/ramulator/frontend/impl/external_wrapper"
 if [ -f "$PATCHFILES_DIR/sst_frontend.cpp" ]; then
     cp "$PATCHFILES_DIR/sst_frontend.cpp" "$RAMULATOR_DIR/src/ramulator/frontend/impl/external_wrapper/"
@@ -37,7 +37,7 @@ else
     echo "  ⚠️ Warning: $PATCHFILES_DIR/sst_frontend.cpp not found!"
 fi
 
-# III. Copy sedram.py into python/ramulator/dram
+# Copy sedram.py into python/ramulator/dram
 mkdir -p "$RAMULATOR_DIR/python/ramulator/dram"
 if [ -f "$PATCHFILES_DIR/sedram.py" ]; then
     cp "$PATCHFILES_DIR/sedram.py" "$RAMULATOR_DIR/python/ramulator/dram/"
@@ -47,19 +47,25 @@ else
 fi
 
 # ------------------------------------------------------------------
-# Step 2: Install Python Package & Auto-generate SeDRAM.cpp
+# Step 2: Install Python Module & Auto-generate SeDRAM.cpp
 # ------------------------------------------------------------------
 echo "[2/5] Installing Python module & auto-generating SeDRAM.cpp..."
 
 cd "$RAMULATOR_DIR"
 
-# Install package in editable mode so 'python3 -m ramulator' works natively
+# Dynamically export user site-packages path to resolve user-level pip installs
+export PYTHONUSERBASE="/home/sstuser/.local"
+PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+export PYTHONPATH="$RAMULATOR_DIR/python:$RAMULATOR_DIR:$PYTHONUSERBASE/lib/python$PYTHON_VERSION/site-packages:$PYTHONPATH"
+export PATH="$PYTHONUSERBASE/bin:$PATH"
+
+# Install package in editable mode
 pip install -e . --no-build-isolation || python3 -m pip install -e .
 
 DRAM_IMPL_DIR="$RAMULATOR_DIR/src/ramulator/dram/impl"
 mkdir -p "$DRAM_IMPL_DIR"
 
-# Run the codegen command
+# Run codegen
 python3 -m ramulator codegen SeDRAM
 
 # Verify SeDRAM.cpp was generated properly into src/ramulator/dram/impl
@@ -75,7 +81,7 @@ fi
 # ------------------------------------------------------------------
 echo "[3/5] Patching CMakeLists and source code..."
 
-# II. Modify root/frontend CMakeLists.txt to include sst_frontend.cpp
+# Modify root/frontend CMakeLists.txt to include sst_frontend.cpp
 FRONTEND_CMAKE="$RAMULATOR_DIR/src/ramulator/frontend/CMakeLists.txt"
 if [ -f "$FRONTEND_CMAKE" ]; then
     if ! grep -q "impl/external_wrapper/sst_frontend.cpp" "$FRONTEND_CMAKE"; then
@@ -86,7 +92,7 @@ if [ -f "$FRONTEND_CMAKE" ]; then
     fi
 fi
 
-# IV. Modify src/ramulator/dram/CMakeLists.txt to include SeDRAM.cpp
+# Modify src/ramulator/dram/CMakeLists.txt to include SeDRAM.cpp
 DRAM_CMAKE="$RAMULATOR_DIR/src/ramulator/dram/CMakeLists.txt"
 if [ -f "$DRAM_CMAKE" ]; then
     if ! grep -q "impl/SeDRAM.cpp" "$DRAM_CMAKE"; then
@@ -97,7 +103,7 @@ if [ -f "$DRAM_CMAKE" ]; then
     fi
 fi
 
-# V. Modify src/ramulator/controller/refresh/impl/all_bank.cpp for SeDRAM
+# Modify src/ramulator/controller/refresh/impl/all_bank.cpp for SeDRAM
 ALL_BANK_CPP="$RAMULATOR_DIR/src/ramulator/controller/refresh/impl/all_bank.cpp"
 if [ -f "$ALL_BANK_CPP" ]; then
     sed -i 's/std::array<std::pair<std::string_view, std::string_view>, 11>/std::array<std::pair<std::string_view, std::string_view>, 12>/g' "$ALL_BANK_CPP"
