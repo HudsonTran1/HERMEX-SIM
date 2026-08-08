@@ -38,11 +38,16 @@ RUN groupadd -g ${GROUP_ID} sstgroup || true && \
 
 WORKDIR /workspace/project
 
-# Environment variables for SST Core and Ramulator discovery
+# Environment variables for SST Core, SST Elements, and Ramulator discovery
 ENV SST_CORE_HOME=/workspace/sst-core/sst-core-install
+ENV SST_ELEMENTS_HOME=/workspace/sst-install
 ENV PATH=${SST_CORE_HOME}/bin:${PATH}
 ENV PKG_CONFIG_PATH=${SST_CORE_HOME}/lib/pkgconfig:${PKG_CONFIG_PATH}
 ENV PYTHONPATH=/workspace/ramulator2:${PYTHONPATH}
+
+# SST Element library paths
+ENV SST_LIB_PATH=${SST_ELEMENTS_HOME}/lib/sst-elements-library
+ENV SST_ELEMENT_LIBRARY_PATH=${SST_ELEMENTS_HOME}/lib/sst-elements-library
 
 # Entry script to clone repositories into mounted subfolders if not already present
 RUN printf '#!/usr/bin/env bash\n\
