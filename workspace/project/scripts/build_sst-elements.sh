@@ -164,6 +164,16 @@ if [ ! -f "$SST_CORE_DIR/bin/sst-config" ]; then
     exit 1
 fi
 
+# Locate sst-register binary (provided by SST-Core)
+SST_REGISTER_BIN=""
+if [ -f "$SST_CORE_DIR/bin/sst-register" ]; then
+    SST_REGISTER_BIN="$SST_CORE_DIR/bin/sst-register"
+elif [ -f "$SST_INSTALL_DIR/bin/sst-register" ]; then
+    SST_REGISTER_BIN="$SST_INSTALL_DIR/bin/sst-register"
+elif command -v sst-register &> /dev/null; then
+    SST_REGISTER_BIN="$(command -v sst-register)"
+fi
+
 # Define Ramulator 2 & Debug include/link flags
 RAMULATOR_CPPFLAGS="-I${RAMULATOR2_DIR}/src -I${RAMULATOR2_DIR}/src/ramulator $EXTRA_FLAGS"
 RAMULATOR_CXXFLAGS="$EXTRA_FLAGS"
@@ -205,7 +215,11 @@ build_and_register_element() {
 
     # Explicitly register with SST Core to prevent missing subcomponent errors
     echo "--> Registering $elem with SST Core..."
-    "$SST_INSTALL_DIR/bin/sst-register" SST_ELEMENT_SOURCE "${elem}=${SST_ELEMENTS_DIR}/src/sst/elements/${elem}" || true
+    if [ -n "$SST_REGISTER_BIN" ]; then
+        "$SST_REGISTER_BIN" SST_ELEMENT_SOURCE "${elem}=${SST_ELEMENTS_DIR}/src/sst/elements/${elem}" || true
+    else
+        echo "[!] Warning: sst-register binary not found. Skipping component registration."
+    fi
 }
 
 # 2. Build Target Elements based on selection
