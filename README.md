@@ -10,6 +10,10 @@
 
     ```HOST_UID=$UID HOST_GID=$(id -g) docker compose up -d --build```
 
+4. Open terminal to container
+
+```docker exec -it sst bash```
+
 ## Ramulator
 ### Automated setup (experimental)
 
