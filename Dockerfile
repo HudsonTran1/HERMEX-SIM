@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-# Install dependencies for SST Core, SST Elements, and Ramulator 2
+# Install dependencies for SST Core, SST Elements, Ramulator 2, RISC-V toolchain, and Picolibc
 RUN apt-get update && apt-get install -y \
     autoconf \
     automake \
@@ -14,14 +14,18 @@ RUN apt-get update && apt-get install -y \
     cmake \
     curl \
     g++ \
+    gcc-riscv64-unknown-elf \
     gfortran \
     git \
     graphviz \
     libopenmpi-dev \
     libtool \
     libtool-bin \
+    meson \
+    ninja-build \
     openmpi-bin \
     openmpi-common \
+    picolibc-riscv64-unknown-elf \
     python3 \
     python3-dev \
     python3-pip \
