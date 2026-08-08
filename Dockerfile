@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -g ${GROUP_ID} sstgroup || true && \
     useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash sstuser || true
 
-WORKDIR /workspace/projects
+WORKDIR /workspace/project
 
 # Environment variables for SST Core and Ramulator discovery
 ENV SST_CORE_HOME=/workspace/sst-core/sst-core-install
