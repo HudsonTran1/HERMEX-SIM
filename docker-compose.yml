@@ -1,0 +1,10 @@
+services:
+  sst-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sst_ubuntu_cli
+    stdin_open: true  # docker run -i
+    tty: true        # docker run -t
+    volumes:
+      - ${SST_SRC_DIR:-./workspace}:/workspace
