@@ -1,0 +1,816 @@
+diff --git a/src/sst/elements/memHierarchy/membackend/ramulator2/sst_frontend.cpp b/src/sst/elements/memHierarchy/membackend/ramulator2/sst_frontend.cpp
+index 8e2e69757..f72bf2209 100644
+--- a/src/sst/elements/memHierarchy/membackend/ramulator2/sst_frontend.cpp
++++ b/src/sst/elements/memHierarchy/membackend/ramulator2/sst_frontend.cpp
+@@ -18,12 +18,12 @@ class SST : public IFrontEnd, public Implementation {
+       m_memory_system->tick();
+     };
+ 
+-    bool receive_external_requests(int req_type_id, Addr_t addr, int source_id, std::function<void(Request&)> callback) override {
+-      return m_memory_system->send({addr, req_type_id, source_id, callback});
++bool receive_external_requests(int req_type_id, Addr_t addr, int source_id, int size_bytes, std::function<void(Request&)> callback) {
++      return m_memory_system->send({addr, req_type_id, source_id, size_bytes, callback});
+     }
+ 
+   private:
+     bool is_finished() override { return true; };
+ };
+ 
+-}        // namespace Ramulator
+\ No newline at end of file
++}        // namespace Ramulator
+diff --git a/src/sst/elements/memHierarchy/membackend/ramulator2Backend.cc b/src/sst/elements/memHierarchy/membackend/ramulator2Backend.cc
+index abe014f85..b3f105cc8 100644
+--- a/src/sst/elements/memHierarchy/membackend/ramulator2Backend.cc
++++ b/src/sst/elements/memHierarchy/membackend/ramulator2Backend.cc
+@@ -1,38 +1,113 @@
+-// Copyright 2009-2026 NTESS. Under the terms
+-// of Contract DE-NA0003525 with NTESS, the U.S.
+-// Government retains certain rights in this software.
+-//
+-// Copyright (c) 2009-2026, NTESS
+-// All rights reserved.
+-//
+-// Portions are copyright of other developers:
+-// See the file CONTRIBUTORS.TXT in the top level directory
+-// of the distribution for more information.
+-//
+-// This file is part of the SST software package. For license
+-// information, see the LICENSE file in the top level directory of the
+-// distribution.
+-
+-
+ #include <sst_config.h>
+ #include "sst/elements/memHierarchy/util.h"
+-#include "membackend/ramulator2Backend.h"
++#include "sst/elements/memHierarchy/membackend/simpleMemBackend.h"
++
++// Ramulator 2 Headers
+ #include "base/config.h"
++#include "base/factory.h"
++#include "base/request.h"
++#include "frontend/i_frontend.h"
++#include "memory_system/i_memory_system.h"
++
++#include <unordered_map>
++#include <string>
++#include <fstream>
+ 
+ using namespace SST;
+ using namespace SST::MemHierarchy;
+ 
++// ==============================================================================
++// CLASS DEFINITION
++// ==============================================================================
++class ramulator2Memory : public SimpleMemBackend {
++public:
++    SST_ELI_REGISTER_SUBCOMPONENT(
++        ramulator2Memory,
++        "memHierarchy",
++        "ramulator2",
++        SST_ELI_ELEMENT_VERSION(1,0,0),
++        "Ramulator 2 memory backend",
++        SST::MemHierarchy::SimpleMemBackend
++    )
++
++    SST_ELI_DOCUMENT_PARAMS(
++        {"verbose", "Sets the verbosity of the backend output", "0"},
++        {"configFile", "Ramulator2 configuration file", ""}
++    )
++
++    ramulator2Memory(ComponentId_t id, Params &params);
++    virtual bool issueRequest(ReqId reqId, Addr addr, bool isWrite, unsigned numBytes) override;
++    virtual bool clock(Cycle_t cycle) override;
++    virtual void finish() override;
++
++private:
++    Output* output;
++    std::string config_path;
++
++    Ramulator::IFrontEnd* ramulator2_frontend;
++    Ramulator::IMemorySystem* ramulator2_memorysystem;
++};
++
++// ==============================================================================
++// IMPLEMENTATION
++// ==============================================================================
++
++static std::unordered_map<uint64_t, uint64_t> global_dram_req_map;
++static uint64_t sst_id_counter = 0;
++
++// Recursively writes a Ramulator2 ConfigNode as YAML-formatted text.
++// Hand-rolled to avoid depending on yaml-cpp's operator<<(ostream&, YAML::Node
++// const&) -- that symbol isn't linked into libmemHierarchy.so (undefined
++// symbol: _ZN4YAMLlsERSoRKNS_4NodeE at load time), so this sidesteps the
++// dependency entirely rather than requiring a build-system change.
++static void writeConfigNodeYaml(std::ostream& os, const Ramulator::ConfigNode& node, int indent) {
++    const std::string pad(indent * 2, ' ');
++
++    if (node.is_map()) {
++        if (node.map().empty()) {
++            os << "{}\n";
++            return;
++        }
++        for (const auto& [key, child] : node.map()) {
++            if (child.is_map() && !child.map().empty()) {
++                os << pad << key << ":\n";
++                writeConfigNodeYaml(os, child, indent + 1);
++            } else if (child.is_sequence() && !child.seq().empty()) {
++                os << pad << key << ":\n";
++                writeConfigNodeYaml(os, child, indent + 1);
++            } else if (child.is_scalar()) {
++                os << pad << key << ": " << child.scalar() << "\n";
++            } else {
++                os << pad << key << ": {}\n";  // empty map/seq/null
++            }
++        }
++    } else if (node.is_sequence()) {
++        for (const auto& child : node.seq()) {
++            if (child.is_scalar()) {
++                os << pad << "- " << child.scalar() << "\n";
++            } else {
++                os << pad << "-\n";
++                writeConfigNodeYaml(os, child, indent + 1);
++            }
++        }
++    } else if (node.is_scalar()) {
++        os << pad << node.scalar() << "\n";
++    }
++    // is_null() -- write nothing
++}
+ 
+ ramulator2Memory::ramulator2Memory(ComponentId_t id, Params &params) :
+     SimpleMemBackend(id, params)
+ {
+-    config_path = params.find<std::string>("configFile",
+-                                            NO_STRING_DEFINED);
++    uint32_t verbose = params.find<uint32_t>("verbose", 0);
++    output = new Output("Ramulator2Backend[@p:@l]: ", verbose, 0, Output::STDOUT);
++
++    config_path = params.find<std::string>("configFile", NO_STRING_DEFINED);
+     if (config_path == NO_STRING_DEFINED) {
+         output->fatal(CALL_INFO, -1, "Ramulator2 Backend must define a 'configFile' file parameter\n");
+     }
+ 
+-    YAML::Node config = Ramulator::Config::parse_config_file(config_path, {});
++    Ramulator::ConfigNode config = Ramulator::Config::parse_config_file(config_path);
+     ramulator2_frontend = Ramulator::Factory::create_frontend(config);
+     ramulator2_memorysystem = Ramulator::Factory::create_memory_system(config);
+ 
+@@ -42,59 +117,66 @@ ramulator2Memory::ramulator2Memory(ComponentId_t id, Params &params) :
+     output->output(CALL_INFO, "Instantiated Ramulator2 from config file %s\n", config_path.c_str());
+ }
+ 
+-bool ramulator2Memory::issueRequest(ReqId reqId, Addr addr, bool isWrite, unsigned numBytes){
++bool ramulator2Memory::issueRequest(ReqId reqId, Addr addr, bool isWrite, unsigned numBytes) {
+     bool enqueue_success = false;
+-
+-    if (isWrite) {
+-        enqueue_success = ramulator2_frontend->receive_external_requests(1, addr, 0,
+-            [this](Ramulator::Request& req) {});
+-        if (enqueue_success) {
+-            writes.insert(reqId);
+-        }
+-    } else {
+-        enqueue_success = ramulator2_frontend->receive_external_requests(0, addr, 0,
+-            [this](Ramulator::Request& req) {
+-                output->debug(_L10_, "Ramulator2Backend: Read callback\n");
+-                std::deque<ReqId> &reqs = dramReqs[req.addr];
+-
+-                if (reqs.empty())
+-                    output->fatal(CALL_INFO, -1, "Ramulator2Backend: Error - ramulator2Done called but dramReqs[addr] is empty. Addr: %" PRIx64 "\n", (Addr)req.addr);
+-
+-                ReqId memreq = reqs.front();
+-                reqs.pop_front();
+-                if(0 == reqs.size())
+-                    dramReqs.erase(req.addr);
+-
+-                handleMemResponse(memreq);
+-        });
+-        if (enqueue_success) {
+-            if (dramReqs.find(addr) != dramReqs.end()) dramReqs[addr].push_back(reqId);
+-            else {
+-                std::deque<ReqId> reqs;
+-                reqs.push_back(reqId);
+-                dramReqs.insert(std::make_pair(addr,reqs));
++    uint64_t current_id = sst_id_counter++;
++
++    global_dram_req_map[current_id] = static_cast<uint64_t>(reqId);
++
++    int req_type = isWrite ? static_cast<int>(Ramulator::Request::Type::Write)
++                           : static_cast<int>(Ramulator::Request::Type::Read);
++
++    enqueue_success = ramulator2_frontend->receive_external_requests(
++        req_type,
++        addr,
++        0,                             // source_id (single core)
++        static_cast<int>(current_id),  // ingress_id tracking token
++        [this](Ramulator::Request& req) {
++            uint64_t req_token = req.ingress_id;
++            auto it = global_dram_req_map.find(req_token);
++            if (it == global_dram_req_map.end()) {
++                output->fatal(CALL_INFO, -1, "Ramulator2Backend: Callback invoked with unknown unique ID: %lu\n", req_token);
+             }
+-        }
++
++            ReqId memreq = static_cast<ReqId>(it->second);
++            global_dram_req_map.erase(it);
++            handleMemResponse(memreq);
++        },
++        numBytes
++    );
++
++    if (!enqueue_success) {
++        global_dram_req_map.erase(current_id);
+     }
+-    output->debug(_L10_, "Ramulator2Backend: enqueue %s\n", enqueue_success ? "successful" : "unsuccessful");
+ 
++    output->debug(_L10_, "Ramulator2Backend: enqueue %s\n", enqueue_success ? "successful" : "failed");
+     return enqueue_success;
+ }
+ 
+-bool ramulator2Memory::clock(Cycle_t cycle){
++bool ramulator2Memory::clock(Cycle_t cycle) {
+ #ifdef __SST_DEBUG_OUTPUT__
+     output->debug(_L10_, "Ramulator2Backend: Ticking memory system.\n");
+ #endif
+     ramulator2_frontend->tick();
+-    // Ack writes since ramulator won't
+-    while (!writes.empty()) {
+-        handleMemResponse(*writes.begin());
+-        writes.erase(writes.begin());
+-    }
++    ramulator2_memorysystem->tick();
+     return false;
+ }
+ 
+-void ramulator2Memory::finish(){
++void ramulator2Memory::finish() {
++    ramulator2_frontend->update_stats_recursive();
++    ramulator2_memorysystem->update_stats_recursive();
++
+     ramulator2_frontend->finalize();
+     ramulator2_memorysystem->finalize();
+-}
++
++    // finalize() only runs lifecycle hooks (flush/close counters) -- it does
++    // NOT write any file on its own. Dump the native stats tree explicitly.
++    std::ofstream out("ramulator_native_stats.yaml");
++    out << "frontend:\n";
++    writeConfigNodeYaml(out, ramulator2_frontend->collect_stats(), 1);
++    out << "memory_system:\n";
++    writeConfigNodeYaml(out, ramulator2_memorysystem->collect_stats(), 1);
++    out.close();
++
++    output->output(CALL_INFO, "Ramulator2Backend: Closed. Native stats written to ramulator_native_stats.yaml\n");
++}
+\ No newline at end of file
+diff --git a/src/sst/elements/mmu/tlbWrapper.cc b/src/sst/elements/mmu/tlbWrapper.cc
+index cc026aba4..e71deacfb 100644
+--- a/src/sst/elements/mmu/tlbWrapper.cc
++++ b/src/sst/elements/mmu/tlbWrapper.cc
+@@ -29,11 +29,20 @@ TLB_Wrapper::TLB_Wrapper(SST::ComponentId_t id, SST::Params& params): Component(
+         0, // Mask
+         Output::STDOUT );
+ 
+-    exe_ = 0;
++     exe_ = 0;
+     if ( params.find<bool>("exe", false ) ) {
+         exe_ = page_perms::exe;
+     }
+ 
++    // Optional explicit override: if set, skip waiting on an init-phase
++    // MemEventInitCoherence announcement from a Cache/Directory endpoint.
++    // Needed when lowlink connects directly to a non-Cache endpoint (e.g.
++    // MemController with no cache in between).
++    uint32_t line_size_override = params.find<uint32_t>("line_size", 0);
++    if ( line_size_override != 0 ) {
++        line_size_ = line_size_override;
++        line_size_is_override_ = true;
++    }
+     cpu_if_ = configureLink("highlink", new Event::Handler<TLB_Wrapper,&TLB_Wrapper::handleCpuEvent>(this));
+ 
+     if ( nullptr == cpu_if_ ) {
+@@ -68,6 +77,25 @@ TLB_Wrapper::TLB_Wrapper(SST::ComponentId_t id, SST::Params& params): Component(
+ void TLB_Wrapper::init(unsigned int phase)
+ {
+     SST::Event * ev;
++    
++    // If we're using an explicit line_size override (no real Cache/Directory
++    // in the graph to send a MemEventInitCoherence announcement), synthesize
++    // one ourselves and forward it upward, so anything above us on cpu_if_
++    // (e.g. memHierarchy.standardInterface feeding a Vanadis LSQ) learns the
++    // line size the same way it would from a real cache. Send only once.
++    if ( line_size_is_override_ && !sent_synthetic_coherence_ ) {
++        auto* synthetic = new MemHierarchy::MemEventInitCoherence(
++            getName(),                        // src
++            MemHierarchy::Endpoint::Cache,     // type -- matches the gate in the recv branch below
++            false,                             // inclusive
++            false,                             // sendWBAck
++            (MemHierarchy::Addr)line_size_,    // lineSize
++            false                              // tracksPresence
++        );
++        cpu_if_->sendUntimedData(synthetic);
++        sent_synthetic_coherence_ = true;
++    }
++
+ 
+     while ((ev = cpu_if_->recvUntimedData())) { //incoming from CPU forward to mem/caches
+         cache_if_->sendUntimedData(ev);
+diff --git a/src/sst/elements/mmu/tlbWrapper.h b/src/sst/elements/mmu/tlbWrapper.h
+index fa546cb90..db21eeaa3 100644
+--- a/src/sst/elements/mmu/tlbWrapper.h
++++ b/src/sst/elements/mmu/tlbWrapper.h
+@@ -21,6 +21,7 @@
+ #include <sst/core/component.h>
+ #include <sst/core/link.h>
+ #include "sst/elements/memHierarchy/memEvent.h"
++#include "sst/elements/memHierarchy/memEventBase.h"   // for MemEventInitCoherence, Endpoint
+ #include "tlb.h"
+ 
+ namespace SST {
+@@ -42,9 +43,10 @@ class TLB_Wrapper : public SST::Component {
+     SST_ELI_DOCUMENT_STATISTICS()
+ 
+     SST_ELI_DOCUMENT_PARAMS(
+-        {"dbg_level", "Level of verbosity in debug","1"},
+-        {"exe", "Whether pages should have execute permissions by default. Generally, set to True/1 for an Instruction TLB or unified TLB and False/0 for a Data TLB","0"},
+-    )
++    {"dbg_level", "Level of verbosity in debug","1"},
++    {"exe", "Whether pages should have execute permissions by default. Generally, set to True/1 for an Instruction TLB or unified TLB and False/0 for a Data TLB","0"},
++    {"line_size", "Optional: explicit cache line size in bytes. If set (nonzero), bypasses waiting for an init-phase MemEventInitCoherence announcement from a downstream Cache/Directory endpoint -- needed when this TLB wrapper connects directly to a non-Cache endpoint (e.g. MemController) with no cache in between.", "0"},
++)
+ 
+     SST_ELI_DOCUMENT_PORTS(
+         { "highlink", "Port to the CPU" },
+@@ -94,6 +96,8 @@ class TLB_Wrapper : public SST::Component {
+     TLB* tlb_ = nullptr;
+     uint32_t exe_ = 0;
+     uint32_t line_size_ = 0;
++    bool line_size_is_override_ = false;   // <-- add this
++    bool sent_synthetic_coherence_ = false; // <-- and this
+ 
+     SST::Output dbg_;
+     int pending_ = 0;
+diff --git a/src/sst/elements/vanadis/inst/vload.h b/src/sst/elements/vanadis/inst/vload.h
+index 47612a5a2..4e9fbcec5 100644
+--- a/src/sst/elements/vanadis/inst/vload.h
++++ b/src/sst/elements/vanadis/inst/vload.h
+@@ -67,9 +67,9 @@ public:
+ 
+     bool performSignExtension() const { return signed_extend; }
+ 
+-    virtual bool                      isPartialLoad() const { return false; }
++    virtual bool                    isPartialLoad() const { return false; }
+     virtual VanadisFunctionalUnitType getInstFuncType() const { return INST_LOAD; }
+-    virtual const char*               getInstCode() const
++    virtual const char*              getInstCode() const
+     {
+         switch ( memAccessType ) {
+         case MEM_TRANSACTION_LLSC_LOAD:
+@@ -133,6 +133,12 @@ public:
+     {
+         int64_t tmp = reg->getIntReg<int64_t>(phys_int_regs_in[0]);
+ 
++        if ((tmp & 0x8000000000000000ULL) != 0) {
++            fprintf(stderr, "[VANADIS-LOAD-FAIL] isa_reg=%u phys_reg=%u raw_tmp=0x%lx offset=%ld calc_addr=0x%lx ins_addr=0x%lx\n",
++                    isa_int_regs_in[0], phys_int_regs_in[0], (unsigned long)tmp, (long)offset, (unsigned long)(tmp + offset), (unsigned long)getInstructionAddress());
++            fflush(stderr);
++        }
++
+         (*out_addr) = (uint64_t)(tmp + offset);
+         (*width)    = load_width;
+     }
+@@ -140,26 +146,31 @@ public:
+     virtual void
+     computeLoadAddress(SST::Output* output, VanadisRegisterFile* regFile, uint64_t* out_addr, uint16_t* width)
+     {
+-        int64_t tmp_val;
+-        uint64_t mem_addr_reg_val;
+-        uint16_t target_tid = 0;
+-
+-
+-        mem_addr_reg_val = regFile->getIntReg<uint64_t>(phys_int_regs_in[0]);
++        int64_t tmp_val = regFile->getIntReg<int64_t>(phys_int_regs_in[0]);
++
++        // Forced error trace (bypasses #ifdef VANADIS_BUILD_DEBUG)
++        if (((uint64_t)tmp_val & 0x8000000000000000ULL) != 0) {
++            fprintf(stderr, "\n======================================================================\n");
++            fprintf(stderr, "[VANADIS-LOAD-FAIL] Faulting Instruction at Address: 0x%" PRIx64 "\n", getInstructionAddress());
++            fprintf(stderr, "  - ISA Base Register  (isa_reg)  : r%" PRIu16 "\n", isa_int_regs_in[0]);
++            fprintf(stderr, "  - Phys Base Register (phys_reg) : p%" PRIu16 "\n", phys_int_regs_in[0]);
++            fprintf(stderr, "  - Register Value     (raw_tmp)  : 0x%" PRIx64 "\n", (uint64_t)tmp_val);
++            fprintf(stderr, "  - Immediate Offset   (offset)   : %" PRId64 " (0x%" PRIx64 ")\n", offset, (uint64_t)offset);
++            fprintf(stderr, "  - Calculated Address (calc_addr): 0x%" PRIx64 "\n", (uint64_t)(tmp_val + offset));
++            fprintf(stderr, "======================================================================\n\n");
++            fflush(stderr);
++        }
+ 
+-        #ifdef VANADIS_BUILD_DEBUG
++#ifdef VANADIS_BUILD_DEBUG
+         switch ( regType ) {
+         case LOAD_INT_REGISTER:
+         {
+-            // if(output->getVerboseLevel() >= 16)
+-            {
+-                output->verbose(
+-                    CALL_INFO, 16, 0,
+-                    "Execute: (0x%" PRI_ADDR ") LOAD addr-reg: %" PRIu16 " phys: %" PRIu16 " / offset: %" PRId64
+-                    " / target: %" PRIu16 " phys: %" PRIu16 "\n",
+-                    getInstructionAddress(), isa_int_regs_in[0], phys_int_regs_in[0], offset, isa_int_regs_out[0],
+-                    phys_int_regs_out[0]);
+-            }
++            output->verbose(
++                CALL_INFO, 16, 0,
++                "Execute: (0x%" PRI_ADDR ") LOAD addr-reg: %" PRIu16 " phys: %" PRIu16 " / offset: %" PRId64
++                " / target: %" PRIu16 " phys: %" PRIu16 "\n",
++                getInstructionAddress(), isa_int_regs_in[0], phys_int_regs_in[0], offset, isa_int_regs_out[0],
++                phys_int_regs_out[0]);
+         } break;
+         case LOAD_FP_REGISTER:
+         {
+@@ -174,21 +185,16 @@ public:
+         } break;
+         }
+ 
+-        // if(output->getVerboseLevel() >= 16)
+-        {
+-            output->verbose(
+-                CALL_INFO, 16, 0, "[execute-load]: transaction-type:  %s / ins: 0x%" PRI_ADDR "\n",
+-                getTransactionTypeString(memAccessType), getInstructionAddress());
+-            output->verbose(
+-                CALL_INFO, 16, 0, "[execute-load]: reg[%5" PRIu16 "]:       %" PRIu64 "\n", phys_int_regs_in[0],
+-                mem_addr_reg_val);
+-            output->verbose(CALL_INFO, 16, 0, "[execute-load]: offset           : %" PRId64 "\n", offset);
+-            output->verbose(
+-                CALL_INFO, 16, 0, "[execute-load]: (add)            : %" PRIu64 "\n", (mem_addr_reg_val + offset));
+-        }
+-        #endif
+-
+-        tmp_val = regFile->getIntReg<int64_t>(phys_int_regs_in[0]);
++        output->verbose(
++            CALL_INFO, 16, 0, "[execute-load]: transaction-type:  %s / ins: 0x%" PRI_ADDR "\n",
++            getTransactionTypeString(memAccessType), getInstructionAddress());
++        output->verbose(
++            CALL_INFO, 16, 0, "[execute-load]: reg[%5" PRIu16 "]:       %" PRIu64 "\n", phys_int_regs_in[0],
++            (uint64_t)tmp_val);
++        output->verbose(CALL_INFO, 16, 0, "[execute-load]: offset           : %" PRId64 "\n", offset);
++        output->verbose(
++            CALL_INFO, 16, 0, "[execute-load]: (add)            : %" PRIu64 "\n", ((uint64_t)tmp_val + offset));
++#endif
+ 
+         (*out_addr) = (uint64_t)(tmp_val + offset);
+         (*width)    = load_width;
+diff --git a/src/sst/elements/vanadis/lsq/vbasiclsq.h b/src/sst/elements/vanadis/lsq/vbasiclsq.h
+index 641286077..23c418d64 100644
+--- a/src/sst/elements/vanadis/lsq/vbasiclsq.h
++++ b/src/sst/elements/vanadis/lsq/vbasiclsq.h
+@@ -218,7 +218,7 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+             }
+         }
+ 
+-        void tick(uint64_t cycle) override
++       void tick(uint64_t cycle) override
+         {
+             #ifdef VANADIS_BUILD_DEBUG
+             if(output_->getVerboseLevel() >= 16) {
+@@ -248,12 +248,26 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                 }
+             }
+             #endif
++
++            // --- PROGRESS UPDATE LOGIC ---
++            // Prints the internal queues sizes every 10,000 cycles to trace if LSQ queues
++            // are ballooning unboundedly, explaining the exponential simulation degradation.
++            if (UNLIKELY(cycle % 10000 == 0)) {
++                output_->output(CALL_INFO, 
++                    "[LSQ HEARTBEAT] cycle=%llu | op_q_size=%zu | stores_pending_size=%zu | std_stores_in_flight=%zu | loads_pending=%zu\n",
++                    (unsigned long long)cycle, 
++                    op_q_size_, 
++                    stores_pending_size_, 
++                    std_stores_in_flight_.size(), 
++                    loads_pending_.size());
++            }
++            // -----------------------------
++
+             stat_op_q_size_->addData(op_q_size_);
+             stat_loads_pending_->addData(loads_pending_.size());
+             stat_stores_pending_->addData(std_stores_in_flight_.size());
+             stat_store_buffer_entries_->addData(stores_pending_size_);
+ 
+-            // this can be called multiple times per cycle
+             for(uint32_t attempt = 0; attempt < max_issue_attempts_per_cycle_; ++attempt) {
+                 if (op_q_size_ == 0)
+                     break;
+@@ -262,11 +276,10 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                 if ( op_q_index_ == hw_threads_ ) op_q_index_ = 0;
+             }
+ 
+-            // attempt to issue any front of ROB stores into memory system
+             for (int i = 0; i < hw_threads_; i++) {
+                 bool issued = issueStoreFront(stores_pending_index_);
+                 stores_pending_index_ = (stores_pending_index_ + 1) % hw_threads_;
+-                if (issued) break; // one per cycle TODO: parameterize
++                if (issued) break;
+             }
+         }
+ 
+@@ -805,7 +818,7 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                         false, 0, store_address, store_ins->getInstructionAddress(), store_ins->getHWThread());
+                     #endif
+ 
+-                    std_stores_in_flight_.insert(store_req->getID());
++                    std_stores_in_flight_.insert({store_req->getID(), {store_address, store_width_left}});
+                     mem_interface_->send(store_req);
+ 
+                     payload.clear();
+@@ -826,7 +839,7 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                     #endif
+ 
+                     mem_interface_->send(store_req);
+-                    std_stores_in_flight_.insert(store_req->getID());
++                    std_stores_in_flight_.insert({store_req->getID(), {store_address_right, store_width_right}});
+ 
+                     return true;
+                 } else {
+@@ -851,7 +864,7 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                         false, 0, store_address, store_ins->getInstructionAddress(), store_ins->getHWThread());
+                     #endif
+ 
+-                    std_stores_in_flight_.insert(store_req->getID());
++                    std_stores_in_flight_.insert({store_req->getID(), {store_address, store_width}});
+                     mem_interface_->send(store_req);
+ 
+                     return true;
+@@ -1063,12 +1076,9 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                         #ifdef VANADIS_BUILD_DEBUG
+                         output_->verbose(CALL_INFO, 9, VANADIS_DBG_LSQ_LOAD_FLG, "---> [memory-transaction]: LOCK-load (not split) load-at: 0x%" PRI_ADDR " width: %" PRIu64 "\n",
+                             load_address, load_width);
+-
++                        #endif
+                         load_req = new StandardMem::ReadLock(load_address & address_mask_, load_width, 0,
+                             load_address & address_mask_, load_ins->getInstructionAddress(), load_ins->getHWThread());
+-                        #endif
+-                        load_req = new StandardMem::ReadLock(load_address, load_width, 0,
+-                            load_address, load_ins->getInstructionAddress(), load_ins->getHWThread());
+                     }
+                 } break;
+             }
+@@ -1224,9 +1234,9 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+                             front_entry->getInstructionAddress(), front_entry->getHWThread());
+                     }
+ 
+-                    // if we have too many operations pending, return false to tell handler
+-                    // we couldn't perform any operations this cycle
+-                    if(stores_pending_size_ >= max_stores_) {
++                    // if we have too many operations pending or outstanding in flight to memory, 
++                    // return false to stall store processing until the memory controller drains.
++                    if(stores_pending_size_ >= max_stores_ || storeBufferFull()) {
+                         return false;
+                     }
+ 
+@@ -1495,16 +1505,26 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+         bool checkStoreConflict(const uint32_t thread, const uint64_t address, const uint64_t width)
+         {
+             bool conflicts = false;
+-
+             for(auto store_itr = stores_pending_[thread].begin(); store_itr != stores_pending_[thread].end(); store_itr++) {
+                 VanadisBasicStorePendingEntry* current_entry = (*store_itr);
+-
+                 if(UNLIKELY(current_entry->storeAddressOverlaps(address, width))) {
+                     conflicts = true;
+                     break;
+                 }
+             }
+-
++            if (!conflicts) {
++                // Standard stores are popped from stores_pending_ at issue time,
++                // not at completion, so a later load can race ahead of a store
++                // whose write hasn't actually landed in DRAM yet. Check the
++                // still-in-flight set too.
++                for (const auto& kv : std_stores_in_flight_) {
++                    const InFlightStoreRange& r = kv.second;
++                    if (address < (r.address + r.width) && r.address < (address + width)) {
++                        conflicts = true;
++                        break;
++                    }
++                }
++            }
+             return conflicts;
+         }
+ 
+@@ -1513,7 +1533,8 @@ class VanadisBasicLoadStoreQueue : public SST::Vanadis::VanadisLoadStoreQueue
+         std::vector< std::deque<VanadisBasicLoadStoreEntry*> > op_q_;
+         std::vector< std::deque<VanadisBasicStorePendingEntry*> > stores_pending_;
+         std::deque<VanadisBasicLoadPendingEntry*> loads_pending_;
+-        std::set<StandardMem::Request::id_t> std_stores_in_flight_;
++        struct InFlightStoreRange { uint64_t address; uint64_t width; };
++        std::unordered_map<StandardMem::Request::id_t, InFlightStoreRange> std_stores_in_flight_;
+         int op_q_index_; // Next hw_thread to check in op_q queues
+         int stores_pending_index_; // Next hw thread to check in stores_pending q's
+         size_t op_q_size_; // Total number of loads and stores in all threads' op_q_ queues
+diff --git a/src/sst/elements/vanadis/vanadis.cc b/src/sst/elements/vanadis/vanadis.cc
+index 994cdf458..fe3882ee1 100644
+--- a/src/sst/elements/vanadis/vanadis.cc
++++ b/src/sst/elements/vanadis/vanadis.cc
+@@ -196,6 +196,7 @@ VanadisCore::VanadisCore(SST::ComponentId_t id, SST::Params& params) : Component
+ 
+         // Create an ROB for the thread
+         rob.push_back(new VanadisCircularQueue<VanadisInstruction*>(rob_count));
++        pending_syscall_ins_.push_back(nullptr);
+         // WE NEED ISA INTEGER AND FP COUNTS HERE NOT ZEROS
+         issue_isa_tables.push_back(new VanadisISATable( "issue",
+             thread_decoders[i]->getDecoderOptions(), thread_decoders[i]->countISAIntReg(),
+@@ -438,7 +439,7 @@ VanadisCore::startThread(int thr, uint64_t stackStart, uint64_t instructionPoint
+     // Force retire table to sync with issue table
+     retire_isa_tables[thr]->reset(issue_isa_tables[thr]);
+ 
+-    if ( initial_config_ip > 0 ) {
++    if ( instructionPointer == 0 && initial_config_ip > 0 ) {
+         output->verbose(
+                 CALL_INFO, 8, 0, "Overrding entry point for core-0, thread-0, set to 0x%" PRI_ADDR "\n", initial_config_ip);
+         thread_decoders[thr]->setInstructionPointer(initial_config_ip);
+@@ -1164,6 +1165,7 @@ VanadisCore::performRetire(int rob_num, VanadisCircularQueue<VanadisInstruction*
+                     #endif
+                     bool ret, flushLSQ;
+                     std::tie( ret, flushLSQ) = thr_decoder->getOSHandler()->handleSysCall(the_syscall_ins);
++                    pending_syscall_ins_[ins_thread] = the_syscall_ins;
+ 
+                     // mark as front of ROB now we can proceed
+                     rob_front->markFrontOfROB();
+@@ -1177,6 +1179,7 @@ VanadisCore::performRetire(int rob_num, VanadisCircularQueue<VanadisInstruction*
+                         the_syscall_ins->getInstructionAddress(), ins_thread);
+                         #endif
+                         syscallReturn( rob_front->getHWThread() );
++                        pending_syscall_ins_[ins_thread] = nullptr;
+                     }
+                     #ifdef VANADIS_BUILD_DEBUG
+                     else
+@@ -2121,12 +2124,15 @@ VanadisCore::handleIncomingInstCacheEvent(StandardMem::Request* ev)
+ void
+ VanadisCore::handleMisspeculate(const uint32_t hw_thr, const uint64_t new_ip)
+ {
++    fprintf(stderr, "[VANADIS] handleMisspeculate hw_thr=%u new_ip=0x%lx\n",
++            hw_thr, (unsigned long)new_ip);
++    fflush(stderr);
+     #ifdef VANADIS_BUILD_DEBUG
+-    // if(output->getVerboseLevel() >= 8)
+     {
+         output->verbose(CALL_INFO, 8, 0, "-> Handle mis-speculation on %" PRIu32 " (new-ip: 0x%" PRI_ADDR ")...\n", hw_thr, new_ip);
+     }
+     #endif
++
+     clearFuncUnit(hw_thr, fu_int_arith);
+     clearFuncUnit(hw_thr, fu_int_div);
+     clearFuncUnit(hw_thr, fu_fp_arith);
+@@ -2134,21 +2140,22 @@ VanadisCore::handleMisspeculate(const uint32_t hw_thr, const uint64_t new_ip)
+     clearFuncUnit(hw_thr, fu_branch);
+ 
+     lsq->clearLSQByThreadID(hw_thr);
+-    //resetRegisterStacks(hw_thr);
+-    clearROBMisspeculate(hw_thr);
+ 
+-    // Reset the ISA table to get correct ISA to physical mappings
++    // 1. Reset the speculative ISA table back to the retired state FIRST
+     issue_isa_tables[hw_thr]->reset(retire_isa_tables[hw_thr]);
++
++    // 2. Clear squashed instructions from ROB and return speculative physical registers to stacks
++    clearROBMisspeculate(hw_thr);
++
++    // 3. Set the instruction pointer for fetch recovery
+     thread_decoders[hw_thr]->setInstructionPointerAfterMisspeculate(new_ip);
+ 
+     #ifdef VANADIS_BUILD_DEBUG
+-    // if(output->getVerboseLevel() >= 8)
+-     {
++    {
+         output->verbose(CALL_INFO, 8, 0, "-> Mis-speculate repair finished.\n");
+     }
+     #endif
+ }
+-
+ void
+ VanadisCore::clearFuncUnit(const uint32_t hw_thr, std::vector<VanadisFunctionalUnit*>& unit)
+ {
+@@ -2164,38 +2171,50 @@ VanadisCore::clearROBMisspeculate(const uint32_t hw_thr)
+     thr_rob = rob[hw_thr];
+     stat_rob_cleared_entries->addData(thr_rob->size());
+ 
++    // An outstanding syscall that has already been dispatched to the OS
++    // handler must NOT be deleted here -- it is tracked authoritatively
++    // via pending_syscall_ins_[hw_thr], set at dispatch and cleared once
++    // its response is processed in recvOSEvent. Using that pointer
++    // directly (rather than re-deriving "is this the pending syscall"
++    // from ROB position/flags) avoids a race where the instruction gets
++    // deleted here despite still being awaited.
++    VanadisInstruction* pending_syscall =
++        static_cast<VanadisInstruction*>(pending_syscall_ins_[hw_thr]);
++
+     // Delete all the instructions which we aren't going to process
+     for ( size_t i = 0; i < thr_rob->size(); ++i ) {
+         VanadisInstruction* next_ins = thr_rob->peekAt(i);
++
++        if ( nullptr != pending_syscall && next_ins == pending_syscall ) {
++            continue;
++        }
++
+         if ( next_ins->completedIssue() )  {
+             next_ins->returnOutRegs( int_register_stack, fp_register_stack  );
+         }
+         delete next_ins;
+     }
+-
+     // clear the ROB entries and reset
+     thr_rob->clear();
++
++    // Re-seed the ROB with the still-outstanding syscall so its response
++    // can still be matched against the ROB front.
++    if ( nullptr != pending_syscall ) {
++        thr_rob->push(pending_syscall);
++    }
+ }
+ 
+ void
+ VanadisCore::syscallReturn(uint32_t thr)
+ {
+-    VanadisCircularQueue<VanadisInstruction*>* thr_rob;
+-    thr_rob = rob[thr];
+-
+-    if ( thr_rob->empty() ) {
+-        output->fatal(CALL_INFO, -1, "Error - syscall return called on thread: %" PRIu32 " but ROB is empty.\n", thr);
+-    }
+-
+-    VanadisInstruction*        rob_front   = thr_rob->peek();
+-    VanadisSysCallInstruction* syscall_ins = dynamic_cast<VanadisSysCallInstruction*>(rob_front);
++    VanadisSysCallInstruction* syscall_ins = pending_syscall_ins_[thr];
+ 
+     if ( nullptr == syscall_ins ) {
+         output->fatal(
+             CALL_INFO, -1,
+-            "Error - unable to obtain a syscall from the ROB front of "
+-            "thread %" PRIu32 " (code: %s)\n",
+-            thr, rob_front->getInstCode());
++            "Error - syscallReturn called for thread %" PRIu32 " but no "
++            "tracked pending syscall instruction exists.\n",
++            thr);
+     }
+ 
+     #ifdef VANADIS_BUILD_DEBUG
+@@ -2215,6 +2234,8 @@ VanadisCore::syscallReturn(uint32_t thr)
+ }
+ 
+ void VanadisCore::recvOSEvent(SST::Event* ev) {
++    fprintf(stderr, "[VANADIS] recvOSEvent ev=%p\n", (void*)ev);
++    fflush(stderr);
+     #ifdef VANADIS_BUILD_DEBUG
+     output->verbose(CALL_INFO, 16, 0, "-> recv os response\n");
+     #endif
+@@ -2224,6 +2245,11 @@ void VanadisCore::recvOSEvent(SST::Event* ev) {
+ 
+     if (nullptr != os_resp) { // Case 0
+         int hw_thr = os_resp->getHWThread();
++        fprintf(stderr,
++                "[VANADIS] os_resp hw_thr=%d return=%" PRId64 " exited=%d successful=%d\n",
++                hw_thr, os_resp->getReturnCode(), os_resp->hasExited() ? 1 : 0,
++                os_resp->isSuccessful() ? 1 : 0);
++        fflush(stderr);
+ 
+         #ifdef VANADIS_BUILD_DEBUG
+         output->verbose(CALL_INFO, 16, 0, "hw_thread %d: syscall return-code: %" PRId64 " (success: %3s)\n",
+@@ -2236,7 +2262,15 @@ void VanadisCore::recvOSEvent(SST::Event* ev) {
+             #endif
+             thread_decoders[hw_thr]->getOSHandler()->recvSyscallResp ( os_resp );
+             ev = nullptr;
++            if (nullptr == pending_syscall_ins_[hw_thr]) {
++                fprintf(stderr,
++                        "[VANADIS] recvOSEvent hw_thr=%d has no tracked pending syscall, dropping response\n",
++                        hw_thr);
++                fflush(stderr);
++                return;
++            }
+             syscallReturn( hw_thr );
++            pending_syscall_ins_[hw_thr] = nullptr;
+         }
+         #ifdef VANADIS_BUILD_DEBUG
+         else
+diff --git a/src/sst/elements/vanadis/vanadis.h b/src/sst/elements/vanadis/vanadis.h
+index 050e20834..50aca0c86 100644
+--- a/src/sst/elements/vanadis/vanadis.h
++++ b/src/sst/elements/vanadis/vanadis.h
+@@ -87,6 +87,8 @@ private:
+     const uint32_t hw_thr;
+ };
+ 
++class VanadisSysCallInstruction;
++
+ class VanadisCore : public SST::Component
+ {
+ 
+@@ -282,6 +284,7 @@ private:
+     uint32_t m_curIssueHwThread;
+ 
+     std::vector<VanadisCircularQueue<VanadisInstruction*>*> rob;
++    std::vector<VanadisSysCallInstruction*> pending_syscall_ins_;
+     std::vector<VanadisCircularQueue<VanadisInstruction*>*> v_warp_rob;
+     std::vector<VanadisDecoder*>                            thread_decoders;
+     std::vector<const VanadisDecoderOptions*>               isa_options;
