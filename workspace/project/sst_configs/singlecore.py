@@ -5,7 +5,7 @@ import os
 # ------------------------------------------------------------------------------
 # Constants & Paths
 # ------------------------------------------------------------------------------
-EXE_PATH = "workload_files/elf/workload_1_core.elf"
+EXE_PATH = "workloads/elf/workload.elf"
 CONFIG_PATH = "ramulator_configs/ramulator_config.yaml"
 
 if not os.path.exists(EXE_PATH):
