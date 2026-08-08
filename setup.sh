@@ -39,10 +39,13 @@ mkdir -p build && cd build
 ../configure --prefix=/workspace/sst-core/sst-core-install
 make -j$(nproc) install
 
-# Patch and prepare SST Elements
+# Patch SST Elements
 cd /workspace/sst-elements
 ./autogen.sh
 patch -p1 --ignore-whitespace < /workspace/patchfiles/patch_sst-elements.patch
+
+# Build SST Elements
+/workspace/project/scripts/build_sst-elements.sh
 '
 
 echo "==> Setup finished successfully! Opening container terminal..."

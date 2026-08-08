@@ -1,7 +1,12 @@
-## To get started
-```git clone -b SetupDownload https://github.com/HudsonTran1/SST_Container/```
+## Quickstart
+Download ```setup.sh```
+run ```chmod +x setup.sh && ./setup.sh```
 
 # Setting up SST and Ramulator
+
+First, clone the setup branch of the repo
+
+```git clone -b SetupDownload https://github.com/HudsonTran1/SST_Container/```
 
 ## Docker
 1. Ensure dependencies are installed (docker, docker-compose, etc.).
