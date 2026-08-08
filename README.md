@@ -1,4 +1,5 @@
-//handwritten
+## To get started
+```git clone -b SetupDownload https://github.com/HudsonTran1/SST_Container/```
 
 # Setting up SST and Ramulator
 
