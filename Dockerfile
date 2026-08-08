@@ -4,20 +4,23 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies for SST Core, SST Elements, and Ramulator 2
 RUN apt-get update && apt-get install -y \
+    autoconf \
+    automake \
     build-essential \
     cmake \
-    git \
-    python3 \
-    python3-dev \
-    libtool \
-    automake \
-    autoconf \
+    curl \
     g++ \
     gfortran \
-    libopenmpi-dev \
-    openmpi-bin \
+    git \
     graphviz \
-    curl \
+    libopenmpi-dev \
+    libtool \
+    libtool-bin \
+    openmpi-bin \
+    openmpi-common \
+    python3 \
+    python3-dev \
+    python3-pip \
     vim \
     && rm -rf /var/lib/apt/lists/*
 
