@@ -124,7 +124,7 @@ make -j"$(nproc)"
 # ------------------------------------------------------------------
 echo "[5/5] Installing Ramulator 2 Python module (editable mode)..."
 cd "$RAMULATOR_DIR"
-python3-pip install -e .
+python3-pip install -e /workspace/ramulator2
 
 echo "=========================================================="
 echo "           Ramulator 2 Setup Complete!                    "

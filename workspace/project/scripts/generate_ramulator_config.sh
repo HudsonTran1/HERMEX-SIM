@@ -57,7 +57,7 @@ echo "------------------------------------------"
 export PYTHONPATH="$SO_DIR:$RAMULATOR_DIR/python:$RAMULATOR_DIR:$RAMULATOR_DIR/build:$RAMULATOR_DIR/build/src:${PYTHONPATH:-}"
 
 # Run conversion using python and the compiled .so library
-python3 -m ramulator2 -c "$SELECTED_PY" -dump-yaml "$OUTPUT_YAML"
+PYTHONPATH="$RAMULATOR_DIR/python:$RAMULATOR_DIR/src:$SO_DIR:${PYTHONPATH:-}" python3 "$SELECTED_PY" -dump-yaml "$OUTPUT_YAML"
 
 echo "------------------------------------------"
 echo "✅ Successfully updated: $OUTPUT_YAML"
