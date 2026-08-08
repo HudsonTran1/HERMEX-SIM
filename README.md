@@ -118,7 +118,7 @@ Run the selective build script
 
     ```sst /workspace/project/sst_configs/singlecore.py```
 
-View statistics by examining ```/workspace/project/stats/ramulator_native_stats.yaml``` and ```/workspace/project/stats/sim_stats.csv```, or run
+View statistics by examining ```/workspace/project/ramulator_native_stats.yaml``` and ```/workspace/project/sim_stats.csv```, or run
 
-    ```./scripts/summarize_stats.sh```
+    ```python3 /workspace/project/scripts/summarize_stats.sh```
 
