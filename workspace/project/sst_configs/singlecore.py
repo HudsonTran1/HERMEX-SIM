@@ -6,7 +6,7 @@ import os
 # Constants & Paths
 # ------------------------------------------------------------------------------
 EXE_PATH = "workload_files/elf/workload_1_core.elf"
-CONFIG_PATH = "ramulator_config.yaml"
+CONFIG_PATH = "ramulator_configs/ramulator_config.yaml"
 
 if not os.path.exists(EXE_PATH):
     raise FileNotFoundError(f"Workload binary not found at {EXE_PATH}")
