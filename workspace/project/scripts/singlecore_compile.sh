@@ -4,7 +4,7 @@
 # Universal Build Script for RISC-V Bare-Metal Workloads (Graph, Sparse, etc.)
 # ------------------------------------------------------------------------------
 WORKLOADS_DIR="workloads"
-DEFAULT_SRC="graph.c"
+DEFAULT_SRC="source/graph.c"
 DEFAULT_OUT="workload.elf"
 COMPILER="riscv64-unknown-elf-gcc"
 
