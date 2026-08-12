@@ -8,7 +8,7 @@ if [ -d "SST_Container" ]; then
 fi
 
 echo "==> Cloning repository into SST_Container subfolder..."
-git clone -b SetupDownload https://github.com/HudsonTran1/SST_Container/ SST_Container
+git clone -b SetupDownload git@github.com:HudsonTran1/SST_Container.git SST_Container
 
 cd SST_Container
 
