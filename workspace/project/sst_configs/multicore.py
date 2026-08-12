@@ -6,7 +6,7 @@ import os
 # Configuration & Constants
 # ------------------------------------------------------------------------------
 NUM_CORES = 8
-EXE_PATH = "./workload_files/elf/workload_8_core.elf"
+EXE_PATH = "./workloads/elf/workload_8_core.elf"
 CONFIG_PATH = "ramulator_config.yaml"
 
 if not os.path.exists(EXE_PATH):
