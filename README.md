@@ -6,7 +6,7 @@ run ```chmod +x setup.sh && ./setup.sh```
 
 First, clone the setup branch of the repo
 
-```git clone -b SetupDownload https://github.com/HudsonTran1/SST_Container/```
+```git clone -b SetupDownload https://github.com/HudsonTran1/SST-Ramulator_Container/```
 
 ## Docker
 1. Ensure dependencies are installed (docker, docker-compose, etc.).
