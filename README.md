@@ -1,6 +1,7 @@
 ## Quickstart
 Download ```setup.sh```
 run ```chmod +x setup.sh && ./setup.sh```
+Alternatively, use the manual setup instructions:
 
 # Setting up SST and Ramulator
 
