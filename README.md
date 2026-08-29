@@ -7,7 +7,7 @@ Alternatively, use the manual setup instructions:
 
 First, clone the setup branch of the repo
 
-```git clone -b SetupDownload https://github.com/HudsonTran1/SST-Ramulator_Container/```
+```git clone -b main https://github.com/HudsonTran1/HERMEX-SIM/```
 
 ## Docker
 1. Ensure dependencies are installed (docker, docker-compose, etc.).
