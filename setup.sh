@@ -2,15 +2,15 @@
 set -e
 
 # Clean up previous directory if re-running
-if [ -d "SST-Ramulator_Container" ]; then
-    echo "==> Cleaning up existing SST-Ramulator_Container directory..."
-    rm -rf SST-Ramulator_Container
+if [ -d "HERMEX-SIM" ]; then
+    echo "==> Cleaning up existing HERMEX-SIM directory..."
+    rm -rf HERMEX-SIM
 fi
 
-echo "==> Cloning repository into SST-Ramulator_Container subfolder..."
-git clone -b SetupDownload git@github.com:HudsonTran1/SST-Ramulator_Container.git SST-Ramulator_Container
+echo "==> Cloning repository into HERMEX-SIM subfolder..."
+git clone -b SetupDownload git@github.com:HudsonTran1/HERMEX-SIM.git HERMEX-SIM
 
-cd SST-Ramulator_Container
+cd HERMEX-SIM
 
 echo "==> Building and starting Docker container..."
 HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d --build
