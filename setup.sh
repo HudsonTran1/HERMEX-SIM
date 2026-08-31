@@ -2,15 +2,15 @@
 set -e
 
 # Clean up previous directory if re-running
-if [ -d "HERMEX-SIM" ]; then
-    echo "==> Cleaning up existing HERMEX-SIM directory..."
-    rm -rf HERMEX-SIM
+if [ -d "Hybrid-bonded_Near-Memory_Processing_Simulator" ]; then
+    echo "==> Cleaning up existing Hybrid-bonded_Near-Memory_Processing_Simulator directory..."
+    rm -rf Hybrid-bonded_Near-Memory_Processing_Simulator
 fi
 
-echo "==> Cloning repository into HERMEX-SIM subfolder..."
-git clone -b SetupDownload git@github.com:HudsonTran1/HERMEX-SIM.git HERMEX-SIM
+echo "==> Cloning repository into Hybrid-bonded_Near-Memory_Processing_Simulator subfolder..."
+git clone -b SetupDownload git@github.com:HudsonTran1/Hybrid-bonded_Near-Memory_Processing_Simulator.git Hybrid-bonded_Near-Memory_Processing_Simulator
 
-cd HERMEX-SIM
+cd Hybrid-bonded_Near-Memory_Processing_Simulator
 
 echo "==> Building and starting Docker container..."
 HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d --build
